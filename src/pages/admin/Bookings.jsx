@@ -122,6 +122,13 @@ const isCancelledCase = (booking) => {
   );
 };
 
+const getCancelledBy = (booking) => {
+  if (booking.decline_reason || booking.cancelled_provider_id || booking.status === "reassigning") {
+    return "provider";
+  }
+  return "farmer";
+};
+
 const matchesTab = (booking, tab) => {
   if (tab === "cancelled") {
     return isCancelledCase(booking);
@@ -129,6 +136,14 @@ const matchesTab = (booking, tab) => {
 
   if (tab === "reassigning") {
     return booking.status === "reassigning";
+  }
+
+  if (tab === "accepted") {
+    return booking.status === "accepted" || booking.status === "confirmed";
+  }
+
+  if (tab === "ongoing") {
+    return booking.status === "ongoing" || booking.status === "in_progress" || booking.status === "Ongoing";
   }
 
   return booking.status === tab;
@@ -147,6 +162,10 @@ const AssignProviderModal = ({ booking, onClose, onAssigned }) => {
     const fetchProviders = async () => {
       setLoading(true);
 
+      const notifiedIds = new Set(
+        (booking.notified_providers || []).map(String)
+      );
+
       const { data, error } = await supabase
         .from("providers")
         .select("*")
@@ -159,17 +178,30 @@ const AssignProviderModal = ({ booking, onClose, onAssigned }) => {
         return;
       }
 
+      let allProviders = [...(data || [])];
+      
+      const foundIds = new Set(allProviders.map(p => String(p.id)));
+      const missingIds = Array.from(notifiedIds).filter(id => !foundIds.has(id));
+      
+      if (missingIds.length > 0) {
+        const { data: missingData } = await supabase
+          .from("providers")
+          .select("*")
+          .in("id", missingIds);
+          
+        if (missingData) {
+          allProviders = [...allProviders, ...missingData];
+        }
+      }
+
       const bookingDate = booking.scheduled_at
         ? new Date(booking.scheduled_at).toLocaleDateString("en-CA")
         : null;
 
-      const notifiedIds = new Set(
-        (booking.notified_providers || []).map(String)
-      );
       const currentRadius = booking.current_radius || 0;
 
       const enriched = await Promise.all(
-        (data || []).map(async (p) => {
+        allProviders.map(async (p) => {
           let isBusy = false;
 
           if (bookingDate) {
@@ -177,7 +209,7 @@ const AssignProviderModal = ({ booking, onClose, onAssigned }) => {
               .from("bookings")
               .select("id")
               .eq("provider_id", p.id)
-              .in("status", ["accepted", "ongoing"])
+              .in("status", ["accepted", "confirmed", "ongoing", "in_progress", "Ongoing"])
               .gte("scheduled_at", `${bookingDate}T00:00:00`)
               .lte("scheduled_at", `${bookingDate}T23:59:59`);
 
@@ -595,7 +627,9 @@ const BookingDetailModal = ({ booking, onClose }) => (
             </p>
             <p>
               <b>Providers Notified:</b>{" "}
-              {(booking.notified_providers || []).length}
+              {booking.notified_provider_names?.length > 0
+                ? booking.notified_provider_names.join(", ")
+                : "None"}
             </p>
             {booking.dispatch_started_at && (
               <p>
@@ -641,15 +675,21 @@ const BookingDetailModal = ({ booking, onClose }) => (
         {isCancelledCase(booking) && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-3 space-y-1">
             <p className="text-xs text-red-600 font-bold uppercase tracking-wide mb-1">
-              Provider Cancellation
+              {getCancelledBy(booking) === "provider" ? "Provider Cancellation" : "Cancelled by Farmer/User"}
             </p>
-            <p>
-              <b>Decline Reason:</b> {booking.decline_reason || "—"}
-            </p>
-            {booking.cancelled_provider_id && (
-              <p className="text-xs text-red-500">
-                Previous provider cancelled this booking.
-              </p>
+            {getCancelledBy(booking) === "provider" ? (
+              <>
+                <p>
+                  <b>Decline Reason:</b> {booking.decline_reason || "—"}
+                </p>
+                {booking.cancelled_provider_id && (
+                  <p className="text-xs text-red-500 mt-1">
+                    Cancelled by: <b>{booking.cancelled_provider_name || `ID: ${booking.cancelled_provider_id}`}</b>
+                  </p>
+                )}
+              </>
+            ) : (
+              <p>This booking was cancelled by the requester.</p>
             )}
           </div>
         )}
@@ -736,6 +776,37 @@ export default function Bookings() {
           }
         }
 
+        let notified_provider_names = [];
+        if (Array.isArray(booking.notified_providers) && booking.notified_providers.length > 0) {
+          try {
+            const { data: nProviders } = await supabase
+              .from("providers")
+              .select("full_name")
+              .in("id", booking.notified_providers);
+            if (nProviders) {
+              notified_provider_names = nProviders.map((p) => p.full_name);
+            }
+          } catch {
+            //
+          }
+        }
+
+        let cancelled_provider_name = "";
+        if (booking.cancelled_provider_id) {
+          try {
+            const { data: cp } = await supabase
+              .from("providers")
+              .select("full_name")
+              .eq("id", booking.cancelled_provider_id)
+              .maybeSingle();
+            if (cp?.full_name) {
+              cancelled_provider_name = cp.full_name;
+            }
+          } catch {
+            //
+          }
+        }
+
         return {
           ...booking,
           crop_name,
@@ -743,6 +814,8 @@ export default function Bookings() {
           display_customer_phone: getDisplayCustomerPhone(booking),
           secondary_customer_text: getSecondaryCustomerText(booking),
           display_provider_name: provider_name || "—",
+          notified_provider_names,
+          cancelled_provider_name,
         };
       })
     );
@@ -795,7 +868,10 @@ export default function Bookings() {
     const map = {
       requested: "bg-yellow-100 text-yellow-700",
       accepted: "bg-blue-100 text-blue-700",
+      confirmed: "bg-blue-100 text-blue-700",
       ongoing: "bg-indigo-100 text-indigo-700",
+      Ongoing: "bg-indigo-100 text-indigo-700",
+      in_progress: "bg-indigo-100 text-indigo-700",
       completed: "bg-green-100 text-green-700",
       rejected: "bg-red-100 text-red-700",
       reassigning: "bg-orange-100 text-orange-700",
@@ -899,7 +975,7 @@ export default function Bookings() {
                     {isCancelledCase(booking) && (
                       <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
                         <AlertTriangle size={11} />
-                        Provider Cancelled
+                        {getCancelledBy(booking) === "provider" ? "Provider Cancelled" : "Cancelled by Farmer/User"}
                       </span>
                     )}
                   </div>
@@ -953,15 +1029,16 @@ export default function Bookings() {
                   </div>
 
                   {booking.current_radius > 0 && (
-                    <div className="flex items-center gap-2 text-xs">
-                      <Radio size={12} className="text-blue-500" />
-                      <span className="text-blue-600 font-semibold">
+                    <div className="flex items-center gap-2 text-xs flex-wrap">
+                      <Radio size={12} className="text-blue-500 shrink-0" />
+                      <span className="text-blue-600 font-semibold shrink-0">
                         Radius: {booking.current_radius} km
                       </span>
-                      <span className="text-gray-400">·</span>
+                      <span className="text-gray-400 shrink-0">·</span>
                       <span className="text-gray-500">
-                        {(booking.notified_providers || []).length} providers
-                        notified
+                        {booking.notified_provider_names?.length > 0 
+                          ? `Notified: ${booking.notified_provider_names.join(", ")}` 
+                          : "0 providers notified"}
                       </span>
                     </div>
                   )}
@@ -998,11 +1075,19 @@ export default function Bookings() {
                         />
                         <div>
                           <p className="text-xs font-bold uppercase tracking-wide text-red-600 mb-1">
-                            Provider Cancellation Reason
+                            {getCancelledBy(booking) === "provider" ? "Provider Cancellation Reason" : "Cancellation Details"}
                           </p>
                           <p className="text-sm text-red-700 font-medium">
-                            {booking.decline_reason || "No reason provided"}
+                            {getCancelledBy(booking) === "provider" 
+                              ? (booking.decline_reason || "No reason provided") 
+                              : "This booking was cancelled by the farmer/user."}
                           </p>
+
+                          {getCancelledBy(booking) === "provider" && booking.cancelled_provider_id && (
+                            <p className="text-xs text-red-600 mt-1">
+                              Cancelled by: <b>{booking.cancelled_provider_name || `ID: ${booking.cancelled_provider_id}`}</b>
+                            </p>
+                          )}
 
                           {booking.status === "reassigning" && (
                             <p className="text-xs text-orange-600 mt-1 flex items-center gap-1">
@@ -1049,7 +1134,7 @@ export default function Bookings() {
                       </button>
                     )}
 
-                  {booking.status === "accepted" && (
+                  {(booking.status === "accepted" || booking.status === "confirmed") && (
                     <button
                       onClick={() => setAssignBooking(booking)}
                       className="w-full py-2 px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold text-sm transition-colors"

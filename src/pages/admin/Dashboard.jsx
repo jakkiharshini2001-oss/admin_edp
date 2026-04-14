@@ -201,58 +201,70 @@ export default function Dashboard() {
     }
   }
 
-  const COLORS = ["#16a34a", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6"];
+  const COLORS = ["#047857", "#0891b2", "#6366f1", "#ea580c", "#ca8a04", "#059669"];
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8 pb-8">
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         <StatsCard
           title="Total Farmers"
           value={stats.farmers}
-          icon={<Users size={40} />}
+          icon={<Users size={24} />}
+          iconColor="text-teal-700"
+          iconBg="bg-teal-50"
         />
         <StatsCard
           title="Verified Providers"
           value={stats.providers}
-          icon={<UserCheck size={40} />}
+          icon={<UserCheck size={24} />}
+          iconColor="text-cyan-700"
+          iconBg="bg-cyan-50"
         />
         <StatsCard
           title="Active Bookings"
           value={stats.activeBookings}
-          icon={<ClipboardList size={40} />}
+          icon={<ClipboardList size={24} />}
+          iconColor="text-indigo-700"
+          iconBg="bg-indigo-50"
         />
         <StatsCard
           title="Today's Revenue"
           value={`₹ ${Number(stats.todayRevenue || 0).toLocaleString()}`}
-          icon={<IndianRupee size={40} />}
+          icon={<IndianRupee size={24} />}
+          iconColor="text-orange-700"
+          iconBg="bg-orange-50"
         />
         <StatsCard
           title="Platform Commission"
           value={`₹ ${Number(stats.platformCommission || 0).toLocaleString()}`}
-          icon={<BadgeDollarSign size={40} />}
+          icon={<BadgeDollarSign size={24} />}
+          iconColor="text-amber-700"
+          iconBg="bg-amber-50"
         />
         <StatsCard
           title="Monthly Growth"
           value={`${stats.monthlyGrowth}%`}
-          icon={<TrendingUp size={40} />}
+          icon={<TrendingUp size={24} />}
+          iconColor="text-emerald-700"
+          iconBg="bg-emerald-50"
         />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-2xl shadow-sm border">
-          <h3 className="text-lg font-semibold mb-4">Revenue Overview</h3>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue Overview</h3>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={revenueData}>
               <XAxis dataKey="month" />
               <YAxis />
               <Tooltip />
-              <Bar dataKey="revenue" fill="#16a34a" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="revenue" fill="#047857" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-sm border">
-          <h3 className="text-lg font-semibold mb-4">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
             Booking Status Distribution
           </h3>
           <ResponsiveContainer width="100%" height={250}>
@@ -274,28 +286,28 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="bg-white p-6 rounded-2xl shadow-sm border">
-        <h3 className="text-lg font-semibold mb-4">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
           Top Performing Providers
         </h3>
 
         <table className="min-w-full text-sm">
           <thead>
-            <tr className="text-left text-slate-500 border-b">
-              <th className="py-3">Provider</th>
-              <th className="py-3">District</th>
-              <th className="py-3">Completed Jobs</th>
-              <th className="py-3">Total Earnings</th>
+            <tr className="text-left text-gray-600 border-b border-gray-200">
+              <th className="py-3 font-semibold">Provider</th>
+              <th className="py-3 font-semibold">District</th>
+              <th className="py-3 font-semibold">Completed Jobs</th>
+              <th className="py-3 font-semibold">Total Earnings</th>
             </tr>
           </thead>
           <tbody>
             {topProviders.length > 0 ? (
               topProviders.map((p, i) => (
-                <tr key={i} className="border-b hover:bg-gray-50">
-                  <td className="py-3 font-medium">{p.name}</td>
-                  <td>{p.district}</td>
-                  <td>{p.jobs}</td>
-                  <td className="font-semibold">
+                <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                  <td className="py-3 font-medium text-gray-900">{p.name}</td>
+                  <td className="text-gray-700">{p.district}</td>
+                  <td className="text-gray-700">{p.jobs}</td>
+                  <td className="font-semibold text-gray-900">
                     ₹ {Number(p.earnings || 0).toLocaleString()}
                   </td>
                 </tr>

@@ -16,9 +16,9 @@ function InfoRow({ label, value }) {
   if (!value && value !== 0) return null;
 
   return (
-    <div className="bg-gray-50 border rounded-xl p-3">
-      <p className="text-xs text-gray-500 mb-1">{label}</p>
-      <p className="text-sm font-semibold text-gray-800 break-words">{value}</p>
+    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+      <p className="text-xs font-medium text-gray-600 uppercase tracking-wide mb-1">{label}</p>
+      <p className="text-sm font-semibold text-gray-900 break-words">{value}</p>
     </div>
   );
 }
@@ -31,21 +31,21 @@ function DocumentLinkCard({ title, url, isImage = false }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="border rounded-xl p-4 bg-white hover:shadow-sm transition block"
+      className="border border-gray-200 rounded-lg p-4 bg-white hover:shadow-md transition block"
     >
       <div className="flex items-center gap-2 mb-3">
-        {isImage ? <Camera size={16} /> : <FileText size={16} />}
-        <p className="font-semibold text-sm text-gray-800">{title}</p>
+        {isImage ? <Camera size={16} className="text-gray-600" /> : <FileText size={16} className="text-gray-600" />}
+        <p className="font-semibold text-sm text-gray-900">{title}</p>
       </div>
 
       {isImage ? (
         <img
           src={url}
           alt={title}
-          className="w-full h-36 object-cover rounded-lg border"
+          className="w-full h-36 object-cover rounded-lg border border-gray-200"
         />
       ) : (
-        <div className="h-36 rounded-lg border bg-gray-50 flex items-center justify-center text-sm text-gray-500">
+        <div className="h-36 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center text-sm text-gray-500">
           View Document
         </div>
       )}
@@ -60,6 +60,7 @@ export default function VendorProfile() {
   const [provider, setProvider] = useState(null);
   const [providerDrones, setProviderDrones] = useState([]);
   const [blockedDates, setBlockedDates] = useState([]);
+  const [completedJobsCount, setCompletedJobsCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const today = new Date();
@@ -79,7 +80,7 @@ export default function VendorProfile() {
     try {
       setLoading(true);
 
-      const [providerRes, dronesRes, bookingsRes] = await Promise.all([
+      const [providerRes, dronesRes, bookingsRes, completedRes] = await Promise.all([
         supabase.from("providers").select("*").eq("id", providerId).single(),
 
         supabase
@@ -93,14 +94,22 @@ export default function VendorProfile() {
           .select("scheduled_at, status")
           .eq("provider_id", providerId)
           .in("status", ["confirmed", "ongoing"]),
+
+        supabase
+          .from("bookings")
+          .select("id", { count: "exact", head: true })
+          .eq("provider_id", providerId)
+          .eq("status", "completed"),
       ]);
 
       if (providerRes.error) throw providerRes.error;
       if (dronesRes.error) throw dronesRes.error;
       if (bookingsRes.error) throw bookingsRes.error;
+      if (completedRes.error) throw completedRes.error;
 
       setProvider(providerRes.data || null);
       setProviderDrones(dronesRes.data || []);
+      setCompletedJobsCount(completedRes.count || 0);
 
       const blocked =
         bookingsRes.data
@@ -117,6 +126,7 @@ export default function VendorProfile() {
       setProvider(null);
       setProviderDrones([]);
       setBlockedDates([]);
+      setCompletedJobsCount(0);
     } finally {
       setLoading(false);
     }
@@ -185,11 +195,11 @@ export default function VendorProfile() {
     .join(", ");
 
   return (
-    <div className="p-6 md:p-8 space-y-8 bg-gray-50 min-h-screen">
+    <div className="p-6 md:p-8 space-y-8 bg-white min-h-screen">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <button
           onClick={() => navigate(-1)}
-          className="w-fit border bg-white px-4 py-2 rounded-xl font-medium hover:bg-gray-50"
+          className="w-fit border border-gray-300 bg-white px-4 py-2 rounded-lg font-medium text-gray-900 hover:bg-gray-50 transition"
         >
           Back
         </button>
@@ -200,13 +210,13 @@ export default function VendorProfile() {
               state: { provider },
             })
           }
-          className="bg-slate-900 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-sm"
+          className="bg-teal-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold shadow-sm hover:bg-teal-800 transition"
         >
           Book Now
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl p-6 border shadow-sm">
+      <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-start gap-6">
           <div className="shrink-0">
             {provider.profile_photo_url ? (
@@ -228,7 +238,7 @@ export default function VendorProfile() {
                 {provider.full_name || "Verified Vendor"}
               </h1>
 
-              <div className="inline-flex items-center gap-2 bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-semibold w-fit">
+              <div className="inline-flex items-center gap-2 bg-teal-100 text-teal-700 px-3 py-1 rounded-full text-sm font-semibold w-fit">
                 <ShieldCheck size={16} />
                 {provider.verification_status === "approved"
                   ? "Verified Vendor"
@@ -262,10 +272,20 @@ export default function VendorProfile() {
         </div>
       </div>
 
+      <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Job Statistics</h2>
+        <div className="grid md:grid-cols-1 gap-4">
+          <div className="rounded-lg p-6 border border-teal-200 bg-teal-50">
+            <p className="text-sm font-medium text-teal-700 mb-2">Completed Jobs</p>
+            <p className="text-4xl font-bold text-teal-900">{completedJobsCount}</p>
+          </div>
+        </div>
+      </div>
+
       <div className="bg-white rounded-2xl p-6 border shadow-sm space-y-6">
         <div className="flex items-center gap-2">
-          <ShieldCheck className="text-green-600" size={20} />
-          <h2 className="text-xl font-bold text-gray-900">
+          <ShieldCheck className="text-teal-700" size={20} />
+          <h2 className="text-lg font-semibold text-gray-900">
             Verified RPC Certification Details
           </h2>
         </div>
@@ -293,8 +313,8 @@ export default function VendorProfile() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl p-6 border shadow-sm space-y-6">
-        <h2 className="text-xl font-bold text-gray-900">Registered Drones</h2>
+      <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm space-y-6">
+        <h2 className="text-lg font-semibold text-gray-900">Registered Drones</h2>
 
         {providerDrones.length === 0 ? (
           <p className="text-gray-500 text-sm">
@@ -305,9 +325,9 @@ export default function VendorProfile() {
             {providerDrones.map((drone, index) => (
               <div
                 key={drone.id || index}
-                className="border rounded-2xl p-5 bg-gray-50 space-y-5"
+                className="border border-gray-200 rounded-lg p-5 bg-gray-50 space-y-5"
               >
-                <h3 className="text-lg font-bold text-gray-800">
+                <h3 className="text-sm font-semibold text-gray-900">
                   Drone #{index + 1}
                 </h3>
 
@@ -370,11 +390,11 @@ export default function VendorProfile() {
         )}
       </div>
 
-      <div className="bg-white rounded-2xl p-6 border shadow-sm">
+      <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
           <div className="flex items-center gap-2">
-            <CalendarDays className="text-slate-700" size={20} />
-            <h2 className="text-xl font-bold text-gray-900">
+            <CalendarDays className="text-teal-700" size={20} />
+            <h2 className="text-lg font-semibold text-gray-900">
               Vendor Availability
             </h2>
           </div>
@@ -394,18 +414,18 @@ export default function VendorProfile() {
         <div className="flex justify-between items-center mb-4">
           <button
             onClick={() => changeMonth("prev")}
-            className="p-2 rounded-lg border hover:bg-gray-50"
+            className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition"
           >
             <ChevronLeft />
           </button>
 
-          <h4 className="font-bold text-lg">
+          <h4 className="font-semibold text-gray-900">
             {monthNames[currentMonth]} {currentYear}
           </h4>
 
           <button
             onClick={() => changeMonth("next")}
-            className="p-2 rounded-lg border hover:bg-gray-50"
+            className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition"
           >
             <ChevronRight />
           </button>
@@ -413,7 +433,7 @@ export default function VendorProfile() {
 
         <div className="grid grid-cols-7 gap-2 text-center text-sm">
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-            <div key={day} className="font-bold text-gray-500 py-2">
+            <div key={day} className="font-semibold text-gray-700 py-2">
               {day}
             </div>
           ))}
@@ -429,14 +449,14 @@ export default function VendorProfile() {
             const isBlocked = blockedDates.includes(iso);
 
             let cellClass =
-              "p-3 rounded-xl border text-sm font-medium transition";
+              "p-3 rounded-lg border text-sm font-medium transition";
 
             if (isPastOrToday) {
-              cellClass += " bg-gray-200 text-gray-500 border-gray-200";
+              cellClass += " bg-gray-100 text-gray-500 border-gray-200";
             } else if (isBlocked) {
-              cellClass += " bg-red-500 text-white border-red-500";
+              cellClass += " bg-orange-500 text-white border-orange-500";
             } else {
-              cellClass += " bg-green-50 text-green-700 border-green-200";
+              cellClass += " bg-teal-50 text-teal-700 border-teal-200";
             }
 
             return (
@@ -449,15 +469,15 @@ export default function VendorProfile() {
 
         <div className="flex flex-wrap gap-4 mt-5 text-xs text-gray-600">
           <div className="flex items-center gap-2">
-            <span className="w-4 h-4 rounded bg-gray-200 border inline-block"></span>
+            <span className="w-4 h-4 rounded bg-gray-100 border border-gray-200 inline-block"></span>
             Past / Today
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-4 h-4 rounded bg-red-500 inline-block"></span>
+            <span className="w-4 h-4 rounded bg-orange-500 inline-block"></span>
             Already Booked
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-4 h-4 rounded bg-green-50 border border-green-200 inline-block"></span>
+            <span className="w-4 h-4 rounded bg-teal-50 border border-teal-200 inline-block"></span>
             Available
           </div>
         </div>
